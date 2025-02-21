@@ -1,0 +1,6 @@
+dynaconf
+fastapi
+httpx
+jinja2
+pyyaml
+uvicorn
