@@ -1,0 +1,21 @@
+# SPDX-FileCopyrightText: none
+# SPDX-License-Identifier: CC0-1.0
+
+#.git/
+.github/
+.venv/
+build/
+dist/
+docs/
+LICENSES/
+tests/
+venv/
+
+.dockerignore
+.flake8
+.gitignore
+.pre-commit-config.yaml
+
+*.license
+config.yaml
+Dockerfile

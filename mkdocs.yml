@@ -1,0 +1,38 @@
+# SPDX-FileCopyrightText: none
+# SPDX-License-Identifier: CC0-1.0
+
+site_name: Prometheus to Icinga2 Checks
+site_description: Monitor metrics in Prometheus and report the state for Icinga2 services
+site_url: https://dinotools.github.io/monitoring-prom2icinga2/
+
+repo_name: DinoTools/monitoring-prom2icinga2
+repo_url: https://github.com/DinoTools/monitoring-prom2icinga2/
+edit_uri: blob/main/docs/
+
+nav:
+    - Home: index.md
+    - Config:
+    - License: LICENSE.md
+    - Issue Tracker: https://github.com/DinoTools/monitoring-prom2icinga2/issues
+    - Git Repo: https://github.com/DinoTools/monitoring-prom2icinga2
+
+docs_dir: docs
+
+theme:
+    name: material
+    # Don't load external fonts
+    font: false
+    icon:
+        repo: fontawesome/brands/github
+
+markdown_extensions:
+    - attr_list
+    - def_list
+    - pymdownx.highlight
+    - pymdownx.superfences
+
+plugins:
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [.]

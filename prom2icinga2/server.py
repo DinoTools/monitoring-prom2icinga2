@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: PhiBo DinoTools (2025-)
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 from contextlib import asynccontextmanager
 from datetime import datetime
 
@@ -53,4 +56,3 @@ async def check_request(host_name: str, request: Request):
     print(f"Fetch: {datetime.now() - start_time}")
 
     return Response(content="ok")
-

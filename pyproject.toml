@@ -1,0 +1,44 @@
+# SPDX-FileCopyrightText: none
+# SPDX-License-Identifier: CC0-1.0
+
+[build-system]
+requires      = ["setuptools>=61.0.0", "wheel", "setuptools_scm[toml]>=7.1"]
+build-backend = "setuptools.build_meta"
+
+[project]
+dynamic = ["version"]
+name = "prom2icinga2"
+description = ""
+readme = "README.md"
+authors = [{ name = "DinoTools"}]
+license = { file = "LICENSE.md" }
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    #"Development Status :: 5 - Production/Stable",
+    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+]
+keywords = ["Prometheus", "Icinga2", "Monitoring"]
+dependencies = [
+    "dynaconf",
+    "fastapi",
+    "httpx",
+    "jinja2",
+    "pyyaml",
+    "uvicorn",
+]
+requires-python = ">=3.8"
+
+[project.urls]
+Homepage = "https://github.com/DinoTools/prom2icinga2"
+
+[project.scripts]
+prom2icinga2 = "prom2icinga2.server:app"
+
+[tool.setuptools.packages.find]
+include = ["prom2icinga2"]
+
+[tool.setuptools_scm]
+write_to = "prom2icinga2/_scm_version.py"
+local_scheme = "no-local-version"
