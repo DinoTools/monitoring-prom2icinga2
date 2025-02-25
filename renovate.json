@@ -1,0 +1,16 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "helpers:pinGitHubActionDigests",
+    "schedule:weekly"
+  ],
+  "enabledManagers": ["github-actions"],
+  "packageRules": [
+    {
+      "description": "Automatically upgrade 'version' key dependencies in GitHub Actions",
+      "matchUpdateTypes": ["minor", "patch"],
+      "matchManagers": ["regex"],
+      "matchPaths": ["(^workflow-templates|\\.github/workflows)/[^/]+\\.ya?ml$"]
+    }
+  ]
+}
