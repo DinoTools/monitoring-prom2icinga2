@@ -37,7 +37,7 @@ jobs:
           - {name: 'PyPy 3.9', python: pypy3.9, os: ubuntu-latest, tox: pypy39}
 
     steps:
-      - uses: "actions/checkout@v3"
+      - uses: "actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683" # v4
 
       - uses: "actions/setup-python@v4"
         with:
