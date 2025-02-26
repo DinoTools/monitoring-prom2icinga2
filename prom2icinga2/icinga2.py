@@ -252,7 +252,7 @@ class ResultValue:
 
 class Threshold:
     REGEX = re.compile(r"(?P<value>\d+)((?P<percent>%)(?P<reference_name>\w+))")
-    REGEX_SIMPLE = re.compile(r"^(?P<operator>(>|<|=|<=|>=))(?P<value>\d+)((?P<percent>%)(?P<reference_name>\w+))$")
+    REGEX_SIMPLE = re.compile(r"^(?P<operator>(>|<|=|<=|>=))(?P<value>\d+)((?P<percent>%)(?P<reference_name>\w+))?$")
     def __init__(self, name, warning, critical):
         self.name = name
         self.warning = None
