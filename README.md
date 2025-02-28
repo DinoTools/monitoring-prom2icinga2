@@ -36,7 +36,7 @@ Prometheus to Icinga2 Checks
 >
 > This project is in an very early stage of development. Don't use it in production.
 
-The Exporter connects to [MikroTik](https://mikrotik.com/) RouterOS devices via API and connects to the log stream to export the logs in realtime.
+This tool queries a Prometheus server based on Icinga2 services and reports the check status.
 
 Requirements
 ------------
