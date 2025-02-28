@@ -1,0 +1,13 @@
+# SPDX-FileCopyrightText: none
+# SPDX-License-Identifier: CC0-1.0
+
+services:
+  prom2icinga2:
+    #image: ghcr.io/dinotools/monitoring-prom2icinga2:main
+    image: prom2icinga2
+    ports:
+      - 8000:8000
+    volumes:
+      - ./checks.yaml:/etc/prom2icinga2/checks.yaml:ro
+      - ./config.toml:/etc/prom2icinga2/config.toml:ro
+    restart: unless-stopped

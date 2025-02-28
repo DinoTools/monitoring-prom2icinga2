@@ -19,7 +19,10 @@ COPY --from=build /build/dist/*.whl /dist/
 
 RUN set -ex; \
     python -m pip install /dist/*.whl; \
+    python -m pip install toml; \
     rm -rf /dist
 
-ENTRYPOINT ["/usr/local/bin/prom2icinga2"]
-CMD ["--config", "/etc/prom2icinga2/config.yaml", "-vv"]
+ENV PROM2ICINGA2_CHECK_CONFIG=/etc/prom2icinga2/checks.yaml \
+    PROM2ICINGA2_CONFIG=/etc/prom2icinga2/config.toml
+
+ENTRYPOINT ["uvicorn", "prom2icinga2.server:app", "--host", "0.0.0.0"]

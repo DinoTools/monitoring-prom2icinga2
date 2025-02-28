@@ -8,31 +8,35 @@ from fastapi import FastAPI, Response, Request
 import httpx
 import jinja2.nativetypes
 
-from .config import load_config, settings
+from . import config
 from .icinga2 import get_icinga2_host
 
 
+
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app_obj: FastAPI):
+    config.load_config()
+    settings = config.settings
+    if settings is None:
+        raise Exception("Internal error settings not loaded")
+
     icinga2_auth = None
     if settings.icinga2.username and settings.icinga2.password:
         icinga2_auth = httpx.BasicAuth(
             username=settings.icinga2.username,
             password=settings.icinga2.password,
         )
-    app.icinga2_client = httpx.AsyncClient(
+    app_obj.icinga2_client = httpx.AsyncClient(
         base_url=settings.icinga2.url,
         auth=icinga2_auth,
-        verify=False  # <- !!! Change it !!!
+        verify=settings.icinga2.ssl_verify
     )
-    app.prometheus_client = httpx.AsyncClient(
+    app_obj.prometheus_client = httpx.AsyncClient(
         base_url=settings.prometheus.url,
     )
-
-    load_config("checks.yaml")
     yield
-    await app.icinga2_client.aclose()
-    await app.prometheus_client.aclose()
+    await app_obj.icinga2_client.aclose()
+    await app_obj.prometheus_client.aclose()
 
 app = FastAPI(lifespan=lifespan)
 jinja2_env = jinja2.nativetypes.NativeEnvironment()

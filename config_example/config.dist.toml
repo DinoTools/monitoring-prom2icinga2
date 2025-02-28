@@ -4,6 +4,8 @@
 [icinga2]
 url="https://localhost:5665/"
 username="icinga2"
+password="password"
+ssl_verify=true
 
 [prometheus]
 url="http://localhost:9090/"
