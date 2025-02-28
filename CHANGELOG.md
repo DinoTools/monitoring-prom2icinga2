@@ -9,6 +9,7 @@ Changelog
 
 - Load settings with pydantic settings
 - docker compose file
+- Check script
 
 ## Changed
 

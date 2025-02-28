@@ -3,6 +3,7 @@
 
 from contextlib import asynccontextmanager
 from datetime import datetime
+import json
 
 from fastapi import FastAPI, Response, Request
 import httpx
@@ -44,6 +45,10 @@ jinja2_env = jinja2.nativetypes.NativeEnvironment()
 @app.get("/check/{host_name}")
 async def check_request(host_name: str, request: Request):
     start_time = datetime.now()
+    response = {
+        "status": 0,
+        "output": "OK",
+    }
 
     icinga2_client: httpx.AsyncClient = request.app.icinga2_client
     print("start")
@@ -56,4 +61,4 @@ async def check_request(host_name: str, request: Request):
 
     print(f"Fetch: {datetime.now() - start_time}")
 
-    return Response(content="ok")
+    return Response(content=json.dumps(response))
