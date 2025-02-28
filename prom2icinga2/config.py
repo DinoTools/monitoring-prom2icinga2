@@ -11,8 +11,10 @@ import yaml
 
 try:
     import toml
+    has_toml = True
 except ImportError:
-    toml = None
+    has_toml = False
+
 
 g_check_configs = {}
 
@@ -50,7 +52,7 @@ def load_config():
             raise Exception(f"Config file {settings_file} not found")
 
         if settings_file.suffix == ".toml":
-            if toml is None:
+            if not has_toml:
                 raise Exception(f"Try to load config from toml file {settings_file}. But toml support not installed")
             settings_data = toml.load(settings_file.open())
         elif settings_file.suffix in (".yaml", ".yml"):

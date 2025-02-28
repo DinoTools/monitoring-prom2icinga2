@@ -12,7 +12,6 @@ from . import config
 from .icinga2 import get_icinga2_host
 
 
-
 @asynccontextmanager
 async def lifespan(app_obj: FastAPI):
     config.load_config()
@@ -46,7 +45,6 @@ jinja2_env = jinja2.nativetypes.NativeEnvironment()
 async def check_request(host_name: str, request: Request):
     start_time = datetime.now()
 
-
     icinga2_client: httpx.AsyncClient = request.app.icinga2_client
     print("start")
     icinga2_host = await get_icinga2_host(host_name, icinga2_client)
@@ -55,7 +53,6 @@ async def check_request(host_name: str, request: Request):
     #     return Response(status_code=404, content="Check not found")
     print("running")
     await icinga2_host.process(request.app.prometheus_client)
-
 
     print(f"Fetch: {datetime.now() - start_time}")
 

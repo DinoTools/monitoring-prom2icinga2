@@ -18,6 +18,7 @@ def test_threshold(value, result_status):
     assert isinstance(result, icinga2.ResultValue)
     assert result.status == result_status
 
+
 @pytest.mark.parametrize("value, result_status", [
     (1, 0),
     (2, 1),

@@ -12,6 +12,4 @@ async def query_prometheus(client: httpx.AsyncClient, query: str):
         }
     )
     results = response.json()
-    #from pprint import pprint
-    #pprint(results)
     return results

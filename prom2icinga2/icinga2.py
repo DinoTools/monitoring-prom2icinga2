@@ -6,7 +6,7 @@ from datetime import datetime
 import json
 from pprint import pprint
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 
 import httpx
 import jinja2
@@ -14,14 +14,14 @@ import jinja2
 from .config import g_check_configs
 from .prometheus import query_prometheus
 
-icinga2_service_cache = {}
+icinga2_service_cache: Dict[str, Dict] = {}
 
 
 class IcingaHost(list):
     def __init__(self, name: str, icinga2_client: httpx.AsyncClient):
         super().__init__()
         self.name = name
-        self.prom_queries = set()
+        self.prom_queries: Set[str] = set()
         self.icinga2_client = icinga2_client
 
     def append(self, item: "IcingaService"):
@@ -49,7 +49,6 @@ class IcingaHost(list):
             results = result_data["data"]["result"]
             fetched_metrics[prom_query] = results
 
-
         icinga_tasks = []
         for icinga_service in self:
             icinga_tasks.append(
@@ -69,13 +68,13 @@ class IcingaService:
             self,
             name: str,
             check,
-            group_label_value:Optional[str]=None,
-            group_label_value_regex:bool=False,
-            query_labels: Optional[Dict[str, str]]=None,
-            value_thresholds: Optional[Dict[str, "Threshold"]]=None):
+            group_label_value: Optional[str] = None,
+            group_label_value_regex: bool = False,
+            query_labels: Optional[Dict[str, str]] = None,
+            value_thresholds: Optional[Dict[str, "Threshold"]] = None):
         self.name = name
         self.check = check
-        self.group_label_value:Optional[re.Pattern] = None
+        self.group_label_value: Optional[re.Pattern] = None
         if isinstance(group_label_value, str):
             if group_label_value_regex:
                 self.group_label_value = re.compile(group_label_value)
@@ -92,16 +91,19 @@ class IcingaService:
 
         self.icinga_host: Optional[IcingaHost] = None
 
-        self.prom_check = g_check_configs.get(self.check)
+        prom_check = g_check_configs.get(self.check)
+        if prom_check is None:
+            raise Exception(f"Unable to get prom check with name '{self.check}' from config")
+        self.prom_check: Dict[str, Any] = prom_check
 
         self.group_label_name = self.prom_check.get("group_label_name")
 
         for value_name, value_config in self.prom_check["values"].items():
-            query_labels = []
+            formated_query_labels: List[str] = []
             for n, v in self.query_labels.items():
-                query_labels.append(f'{n} = "{v}"')
+                formated_query_labels.append(f'{n} = "{v}"')
 
-            self.prom_queries[value_name] = value_config["query"].format(labels=", ".join(query_labels))
+            self.prom_queries[value_name] = value_config["query"].format(labels=", ".join(formated_query_labels))
 
     async def process(self, fetched_metrics: Dict[str, Any]):
         if self.group_label_value is None:
@@ -134,8 +136,7 @@ class IcingaService:
                     result_values[name] = threshold.check(value, value_group_values)
             result_value_groups[value_group_name] = result_values
 
-
-        result_status:int = 0
+        result_status: int = 0
         output_messages: List[str] = []
         for result_values in result_value_groups.values():
             for result_value in result_values.values():
@@ -189,7 +190,14 @@ class IcingaService:
             output_messages=output_messages,
         )
 
-    async def report(self, result_status: int, output_messages: Optional[List[str]]=None, long_output_messages: Optional[List[str]]=None):
+    async def report(
+            self,
+            result_status: int,
+            output_messages: Optional[List[str]] = None,
+            long_output_messages: Optional[List[str]] = None):
+        if self.icinga_host is None:
+            raise Exception("Internal error: Unable to report because icinga host not connected")
+
         output: List[str] = []
 
         if output_messages and len(output_messages) > 0:
@@ -207,9 +215,9 @@ class IcingaService:
             "exit_status": result_status,
             "plugin_output": "\n".join(output),
 
-            #"check_source": "example.localdomain"
+            # "check_source": "example.localdomain"
         }
-        pprint(post_data)
+
         post_data_raw = json.dumps(post_data)
         rp_req = self.icinga_host.icinga2_client.build_request(
             "post",
@@ -219,7 +227,7 @@ class IcingaService:
             },
             content=post_data_raw
         )
-        print(await self.icinga_host.icinga2_client.send(rp_req))
+        await self.icinga_host.icinga2_client.send(rp_req)
 
     @classmethod
     def from_config(cls, name, config):
@@ -240,7 +248,12 @@ class IcingaService:
 
 
 class ResultValue:
-    def __init__(self, value, status:int=0, threshold:Optional["Threshold"]=None, output_messages:Optional[List[str]]=None):
+    def __init__(
+            self,
+            value,
+            status: int = 0,
+            threshold: Optional["Threshold"] = None,
+            output_messages: Optional[List[str]] = None):
         self.value = value
         self.status = status
         self.threshold = threshold
@@ -253,6 +266,7 @@ class ResultValue:
 class Threshold:
     REGEX = re.compile(r"(?P<value>\d+)((?P<percent>%)(?P<reference_name>\w+))")
     REGEX_SIMPLE = re.compile(r"^(?P<operator>(>|<|=|<=|>=))(?P<value>\d+)((?P<percent>%)(?P<reference_name>\w+))?$")
+
     def __init__(self, name, warning, critical):
         self.name = name
         self.warning = None
@@ -348,14 +362,11 @@ async def get_icinga2_host(host_name: str, icinga2_client: httpx.AsyncClient):
     )
     rp_resp = await icinga2_client.send(rp_req)
     rp_resp_data = rp_resp.json()
-    pprint(rp_resp_data)
 
     services = IcingaHost(name=host_name, icinga2_client=icinga2_client)
 
     for service in rp_resp_data["results"]:
-        #pprint(service)
         attributes = service["attrs"]
-        print(attributes)
         services.append(IcingaService.from_config(attributes["name"], attributes["vars"]))
 
     icinga2_service_cache[cache_entry_name] = {
