@@ -12,7 +12,12 @@ from prom2icinga2 import icinga2
     (25, 2),
 ])
 def test_threshold(value, result_status):
-    threshold = icinga2.Threshold(name="test_value", warning=">10", critical=">20")
+    threshold = icinga2.Threshold(
+        name="test_value",
+        warning=">10",
+        critical=">20",
+        condition=None,
+    )
     test_values = {"test_value": value}
     result = threshold.check(value, test_values)
     assert isinstance(result, icinga2.ResultValue)
@@ -25,7 +30,12 @@ def test_threshold(value, result_status):
     (6, 2),
 ])
 def test_threshold_percent(value, result_status):
-    threshold = icinga2.Threshold(name="test_value", warning=">10%other_value", critical=">50%other_value")
+    threshold = icinga2.Threshold(
+        name="test_value",
+        warning=">10%other_value",
+        critical=">50%other_value",
+        condition=None,
+    )
     test_values = {"test_value": value, "other_value": 10}
     result = threshold.check(value, test_values)
     assert isinstance(result, icinga2.ResultValue)

@@ -3,6 +3,19 @@ Changelog
 
 ## unreleased
 
+## 0.4 - 2025-03-03
+
+## Added
+
+- Support for check conditions
+- Validate check configs
+- Validate values from Icinga2
+
+## Fixed
+
+- Issue with simple thresholds
+- Issue with reported state of grouped values
+
 ## 0.3. - 2025-02-28
 
 ## Added

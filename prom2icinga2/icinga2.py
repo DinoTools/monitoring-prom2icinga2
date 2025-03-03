@@ -4,16 +4,20 @@
 import asyncio
 from datetime import datetime
 import json
+import logging
 from pprint import pprint
 import re
+import types
 from typing import Any, Dict, List, Optional, Set
 
 import httpx
 import jinja2
+from pydantic import BaseModel
 
-from .config import g_check_configs
+from .config import g_check_configs, CheckConfig
 from .prometheus import query_prometheus
 
+logger = logging.getLogger()
 icinga2_service_cache: Dict[str, Dict] = {}
 
 
@@ -71,9 +75,16 @@ class IcingaService:
             group_label_value: Optional[str] = None,
             group_label_value_regex: bool = False,
             query_labels: Optional[Dict[str, str]] = None,
-            value_thresholds: Optional[Dict[str, "Threshold"]] = None):
+            value_threshold_configs: Optional[Dict[str, "Icinga2ServiceThresholdConfig"]] = None):
         self.name = name
         self.check = check
+        self.icinga_host: Optional[IcingaHost] = None
+
+        prom_check = g_check_configs.get(self.check)
+        if prom_check is None:
+            raise Exception(f"Unable to get prom check with name '{self.check}' from config")
+        self.check_config: CheckConfig = prom_check
+
         self.group_label_value: Optional[re.Pattern] = None
         if isinstance(group_label_value, str):
             if group_label_value_regex:
@@ -84,26 +95,45 @@ class IcingaService:
         self.query_labels: Dict[str, str] = {}
         if query_labels is not None:
             self.query_labels.update(query_labels)
-        self.value_thresholds: Dict[str, "Threshold"] = {}
-        if value_thresholds is not None:
-            self.value_thresholds.update(value_thresholds)
+
+        self.long_output_template: Optional[jinja2.environment.Template] = None
+        if self.check_config.long_output:
+            self.long_output_template = jinja2.Environment().from_string(self.check_config.long_output)
+
         self.prom_queries: Dict[str, str] = {}
+        self.value_conditions: Dict[str, types.CodeType] = {}
+        self.value_thresholds: Dict[str, "Threshold"] = {}
 
-        self.icinga_host: Optional[IcingaHost] = None
+        if not isinstance(value_threshold_configs, dict):
+            value_threshold_configs = {}
 
-        prom_check = g_check_configs.get(self.check)
-        if prom_check is None:
-            raise Exception(f"Unable to get prom check with name '{self.check}' from config")
-        self.prom_check: Dict[str, Any] = prom_check
-
-        self.group_label_name = self.prom_check.get("group_label_name")
-
-        for value_name, value_config in self.prom_check["values"].items():
+        for value_name, value_config in self.check_config.values.items():
+            # Queries
             formated_query_labels: List[str] = []
             for n, v in self.query_labels.items():
                 formated_query_labels.append(f'{n} = "{v}"')
 
-            self.prom_queries[value_name] = value_config["query"].format(labels=", ".join(formated_query_labels))
+            self.prom_queries[value_name] = value_config.query.format(labels=", ".join(formated_query_labels))
+
+            # Thresholds
+            value_warning = value_config.warning
+            value_critical = value_config.critical
+            value_condition = value_config.condition
+            value_threshold_config = value_threshold_configs.get(value_name)
+            if value_threshold_config:
+                if value_threshold_config.warning:
+                    value_warning = value_threshold_config.warning
+                if value_threshold_config.critical:
+                    value_critical = value_threshold_config.critical
+                if value_threshold_config.condition:
+                    value_condition = value_threshold_config.condition
+
+            self.value_thresholds[value_name] = Threshold(
+                value_name,
+                condition=value_condition,
+                warning=value_warning,
+                critical=value_critical,
+            )
 
     async def process(self, fetched_metrics: Dict[str, Any]):
         if self.group_label_value is None:
@@ -116,7 +146,7 @@ class IcingaService:
         for value_name, prom_query in self.prom_queries.items():
             metrics = fetched_metrics.get(prom_query)
             for metric in metrics:
-                group_label_value = metric["metric"].get(self.group_label_name)
+                group_label_value = metric["metric"].get(self.check_config.group_label_name)
                 if not group_label_value:
                     continue
                 if not self.group_label_value.match(group_label_value):
@@ -147,13 +177,16 @@ class IcingaService:
                     output_messages.extend(result_value.output_messages)
 
         long_output_messages: List[str] = []
-        if "long_output" in self.prom_check:
-            template = jinja2.Environment().from_string(self.prom_check["long_output"])
-            long_output_messages.append(template.render(result_group_values=result_value_groups))
-            print("render long output")
+        if self.long_output_template:
+            logger.debug("Rendering long output")
+            long_output_messages.append(
+                self.long_output_template.render(
+                    result_group_values=result_value_groups
+                )
+            )
 
         await self.report(
-            result_status=1,
+            result_status=result_status,
             output_messages=output_messages,
             long_output_messages=long_output_messages,
         )
@@ -212,6 +245,7 @@ class IcingaService:
         post_data = {
             "type": "Service",
             "filter": f"host.name==\"{self.icinga_host.name}\" && service.name==\"{self.name}\"",
+            "state": result_status,
             "exit_status": result_status,
             "plugin_output": "\n".join(output),
 
@@ -230,24 +264,39 @@ class IcingaService:
         await self.icinga_host.icinga2_client.send(rp_req)
 
     @classmethod
-    def from_config(cls, name, config):
-        value_thresholds: Dict[str, "Threshold"] = {}
-        config_value_thresholds = config.get("prom2icinga_value_thresholds")
-        if config_value_thresholds and isinstance(config_value_thresholds, dict):
-            for value_name, value_config in config_value_thresholds.items():
-                value_thresholds[value_name] = Threshold.from_config(value_name, value_config)
-
+    def from_config(cls, name, config: "Icinga2ServiceConfig"):
         return cls(
             name=name,
-            check=config.get("prom2icinga_check"),
-            group_label_value=config.get("prom2icinga_group_label_value"),
-            group_label_value_regex=config.get("prom2icinga_group_label_value_regex", False),
-            query_labels=config.get("prom2icinga_query_labels"),
-            value_thresholds=value_thresholds,
+            check=config.check,
+            group_label_value=config.group_label_value,
+            group_label_value_regex=config.group_label_value_regex,
+            query_labels=config.query_labels,
+            value_threshold_configs=config.value_thresholds,
         )
 
 
+class Icinga2ServiceConfig(BaseModel):
+    check: str
+    group_label_value: Optional[str] = None
+    group_label_value_regex: bool = False
+    query_labels: Dict[str, str]
+    value_thresholds: Dict[str, "Icinga2ServiceThresholdConfig"] = {}
+
+
+class Icinga2ServiceThresholdConfig(BaseModel):
+    warning: Optional[str] = None
+    critical: Optional[str] = None
+    condition: Optional[str] = None
+
+
 class ResultValue:
+    STATUS_TEXT_MAPPINGS: Dict[int, str] = {
+        0: "OK",
+        1: "Warning",
+        2: "Critical",
+        3: "Unkown"
+    }
+
     def __init__(
             self,
             value,
@@ -262,13 +311,26 @@ class ResultValue:
         else:
             self.output_messages = output_messages
 
+    @property
+    def status_text(self):
+        return self.STATUS_TEXT_MAPPINGS.get(self.status, "n/a")
+
 
 class Threshold:
     REGEX = re.compile(r"(?P<value>\d+)((?P<percent>%)(?P<reference_name>\w+))")
-    REGEX_SIMPLE = re.compile(r"^(?P<operator>(>|<|=|<=|>=))(?P<value>\d+)((?P<percent>%)(?P<reference_name>\w+))?$")
+    REGEX_SIMPLE = re.compile(r"^(?P<operator>(>|<|=|<=|>=|!=)).*")
 
-    def __init__(self, name, warning, critical):
+    def __init__(self, name, condition, warning, critical):
         self.name = name
+
+        self.condition = None
+        if condition:
+            self.condition = compile(
+                condition,
+                condition,
+                "eval"
+            )
+
         self.warning = None
         if warning:
             self.warning = self._compile_threshold(warning)
@@ -296,6 +358,13 @@ class Threshold:
         local_values = {"value": value}
         local_values.update(values)
 
+        if self.condition and not eval(self.condition, {}, local_values):
+            return ResultValue(
+                value,
+                status=0,
+                threshold=self,
+            )
+
         if value is None:
             return ResultValue(
                 value,
@@ -303,8 +372,6 @@ class Threshold:
                 threshold=self,
                 output_messages=[f"Unable to get value for '{self.name}'"]
             )
-
-        pprint(local_values)
         if self.critical and eval(self.critical, {}, local_values):
             return ResultValue(
                 value,
@@ -321,14 +388,6 @@ class Threshold:
             value,
             status=0,
             threshold=self,
-        )
-
-    @classmethod
-    def from_config(cls, name, config):
-        return cls(
-            name,
-            warning=config.get("warning"),
-            critical=config.get("critical"),
         )
 
 
@@ -367,7 +426,18 @@ async def get_icinga2_host(host_name: str, icinga2_client: httpx.AsyncClient):
 
     for service in rp_resp_data["results"]:
         attributes = service["attrs"]
-        services.append(IcingaService.from_config(attributes["name"], attributes["vars"]))
+        tmp_config = {}
+        for n, v in attributes["vars"].items():
+            base_name, _, value_name = n.partition("_")
+            if base_name == "prom2icinga":
+                tmp_config[value_name] = v
+
+        services.append(
+            IcingaService.from_config(
+                attributes["name"],
+                Icinga2ServiceConfig.model_validate(tmp_config)
+            )
+        )
 
     icinga2_service_cache[cache_entry_name] = {
         "services": services,

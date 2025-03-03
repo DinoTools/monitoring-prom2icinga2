@@ -12,6 +12,12 @@ import jinja2.nativetypes
 from . import config
 from .icinga2 import get_icinga2_host
 
+try:
+    from ._scm_version import version as scm_version
+    version_str = scm_version
+except ImportError:
+    version_str = "local-dev"
+
 
 @asynccontextmanager
 async def lifespan(app_obj: FastAPI):
@@ -19,6 +25,8 @@ async def lifespan(app_obj: FastAPI):
     settings = config.settings
     if settings is None:
         raise Exception("Internal error settings not loaded")
+
+    headers = {"user-agent": f"prom2icinga2/{version_str}"}
 
     icinga2_auth = None
     if settings.icinga2.username and settings.icinga2.password:
@@ -29,10 +37,12 @@ async def lifespan(app_obj: FastAPI):
     app_obj.icinga2_client = httpx.AsyncClient(
         base_url=settings.icinga2.url,
         auth=icinga2_auth,
-        verify=settings.icinga2.ssl_verify
+        verify=settings.icinga2.ssl_verify,
+        headers=headers,
     )
     app_obj.prometheus_client = httpx.AsyncClient(
         base_url=settings.prometheus.url,
+        headers=headers,
     )
     yield
     await app_obj.icinga2_client.aclose()

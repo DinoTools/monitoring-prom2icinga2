@@ -3,7 +3,7 @@
 
 import os
 from pathlib import Path
-from typing import Optional
+from typing import Dict, Optional
 
 from pydantic import BaseModel
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -16,9 +16,22 @@ except ImportError:
     has_toml = False
 
 
-g_check_configs = {}
+g_check_configs: Dict[str, "CheckConfig"] = {}
 
 settings: Optional["Settings"] = None
+
+
+class CheckConfig(BaseModel):
+    group_label_name: Optional[str] = None
+    long_output: Optional[str] = None
+    values: Dict[str, "CheckValueConfig"] = {}
+
+
+class CheckValueConfig(BaseModel):
+    query: str
+    condition: Optional[str] = None
+    warning: Optional[str] = None
+    critical: Optional[str] = None
 
 
 class Icinga2Settings(BaseModel):
@@ -68,5 +81,9 @@ def load_config():
     if not check_config_file.exists():
         raise Exception(f"Config file {check_config_file} not found")
 
-    check_config = yaml.safe_load(check_config_file.open())
-    g_check_configs.update(check_config)
+    check_file_config = yaml.safe_load(check_config_file.open())
+    if not isinstance(check_file_config, dict):
+        raise Exception(f"The base config in '{check_config_file}' must be of type dict")
+
+    for check_name, check_config in check_file_config.items():
+        g_check_configs[check_name] = CheckConfig.model_validate(check_config)
